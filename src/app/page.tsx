@@ -32,7 +32,9 @@ export default function ExploreLobby() {
   useEffect(() => {
     const fetchTrips = async () => {
       setIsLoading(true);
-      if (!hasValidSupabaseConfig()) {
+      console.log("URL 實際內容:", JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL));
+      console.log("URL 字串長度:", process.env.NEXT_PUBLIC_SUPABASE_URL?.length);
+      if (!hasValidSupabaseConfig) {
         console.log('Using local mock data - Supabase not configured');
         setTripsList(mockTrips);
         setDbStatus('preview');
@@ -41,24 +43,18 @@ export default function ExploreLobby() {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('trips')
-          .select('*')
-          .eq('is_public', true)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          setTripsList(data as Trip[]);
-          setDbStatus('connected');
-        } else {
-          // If connection works but DB is empty, seed with mock data
-          setTripsList(mockTrips);
+        setIsLoading(true);
+        const { data, error } = await supabase.from('trips').select('*');
+        if (error) {
+          throw new Error(error.message); // 手動丟出錯誤，才會進到下面的 catch
+        }
+        
+        if (data) {
+          setTripsList(data);
           setDbStatus('connected');
         }
       } catch (err) {
-        console.error('Error fetching trips from Supabase:', err);
+        console.error('Error fetching trips from Supabase:', err instanceof Error ? err.message : err);
         setTripsList(mockTrips);
         setDbStatus('preview');
       } finally {
@@ -108,19 +104,23 @@ export default function ExploreLobby() {
       colors: ['#6366f1', '#8b5cf6', '#10b981', '#ffffff']
     });
 
-    if (dbStatus === 'connected' && hasValidSupabaseConfig()) {
+    if (dbStatus === 'connected' && hasValidSupabaseConfig) {
       try {
         const { error } = await supabase
           .from('trips')
-          .insert({
-            id: clonedTrip.id,
-            title: clonedTrip.title,
-            country: clonedTrip.country,
-            city: clonedTrip.city,
-            is_public: clonedTrip.is_public,
-            user_id: clonedTrip.user_id,
-            days_data: clonedTrip.days_data
-          });
+          .insert([
+            {
+              id: clonedTrip.id,
+              title: clonedTrip.title,
+              country: clonedTrip.country,
+              city: clonedTrip.city,
+              is_public: clonedTrip.is_public,
+              user_id: clonedTrip.user_id,
+              days_data: clonedTrip.days_data 
+            }
+          ] as any);
+      
+        if (error) throw error;
 
         if (error) throw error;
         
