@@ -10,8 +10,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.107.0",
     "canvas-confetti": "^1.9.4",
+    "firebase": "^12.14.0",
     "lucide-react": "^1.17.0",
     "mapbox-gl": "^3.24.0",
     "next": "16.2.7",

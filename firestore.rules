@@ -1,0 +1,34 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Trips Collection Rules
+    match /trips/{tripId} {
+      // 1. Allow read access if the trip is marked public, or if the logged-in user is the owner,
+      // or if the owner is a guest or mock user (to allow demo/preview sync).
+      allow read: if resource.data.is_public == true || 
+                  (request.auth != null && request.auth.uid == resource.data.user_id) ||
+                  (resource.data.user_id == 'guest' || resource.data.user_id.startsWith('mock-'));
+      
+      // 2. Allow create if the user is authenticated and sets user_id to their own auth UID,
+      // or if they are setting the owner user_id to 'guest' or a mock user ID.
+      allow create: if (request.auth != null && request.auth.uid == request.resource.data.user_id) ||
+                    (request.resource.data.user_id == 'guest' || request.resource.data.user_id.startsWith('mock-'));
+      
+      // 3. Allow update if the logged-in user owns the trip and doesn't change the owner user_id,
+      // or if the trip owner is a guest/mock user.
+      allow update: if (request.auth != null && request.auth.uid == resource.data.user_id && request.resource.data.user_id == resource.data.user_id) ||
+                    (resource.data.user_id == 'guest' || resource.data.user_id.startsWith('mock-'));
+
+      // 4. Allow delete if the logged-in user owns the trip, or if the trip owner is a guest/mock user.
+      allow delete: if (request.auth != null && request.auth.uid == resource.data.user_id) ||
+                    (resource.data.user_id == 'guest' || resource.data.user_id.startsWith('mock-'));
+    }
+    
+    // Default fallback: block read/write access to any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

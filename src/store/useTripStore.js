@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 
-// 預設精美 Mock Data，讓使用者在沒有設定 Supabase 時也能體驗所有功能
+// 預設精美 Mock Data，讓使用者在沒有設定 Firebase 時也能體驗所有功能
 export const mockTrips = [
   {
     id: 'mock-trip-1',

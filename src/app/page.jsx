@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTripStore, mockTrips } from '../store/useTripStore';
-import { supabase, hasValidSupabaseConfig } from '../lib/supabaseClient';
+import { db, hasValidFirebaseConfig } from '../lib/firebaseClient';
+import { collection, getDocs, doc, setDoc, query, where, or } from 'firebase/firestore';
 import { Search, MapPin, Calendar, User, Eye, Copy, AlertCircle, Database, HelpCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -32,11 +33,12 @@ export default function ExploreLobby() {
   useEffect(() => {
     const fetchTrips = async () => {
       setIsLoading(true);
-      console.log("URL 實際內容:", JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL));
-      console.log("URL 字串長度:", process.env.NEXT_PUBLIC_SUPABASE_URL?.length);
-      if (!hasValidSupabaseConfig) {
-        console.log('Using local mock data - Supabase not configured');
-        setTripsList(mockTrips);
+      console.log("Firebase API Key 實際內容:", JSON.stringify(process.env.NEXT_PUBLIC_FIREBASE_API_KEY));
+      console.log("Firebase API Key 字串長度:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.length);
+      if (!hasValidFirebaseConfig) {
+        console.log('Using local mock data - Firebase not configured');
+        const currentTrips = useTripStore.getState().tripsList;
+        setTripsList(currentTrips);
         setDbStatus('preview');
         setIsLoading(false);
         return;
@@ -44,17 +46,25 @@ export default function ExploreLobby() {
 
       try {
         setIsLoading(true);
-        const { data, error } = await supabase.from('trips').select('*');
-        if (error) {
-          throw new Error(error.message); // 手動丟出錯誤，才會進到下面的 catch
+        let q;
+        if (currentUser && currentUser.id) {
+          q = query(
+            collection(db, 'trips'),
+            or(
+              where('is_public', '==', true),
+              where('user_id', '==', currentUser.id)
+            )
+          );
+        } else {
+          q = query(collection(db, 'trips'), where('is_public', '==', true));
         }
+        const querySnapshot = await getDocs(q);
+        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        if (data) {
-          setTripsList(data);
-          setDbStatus('connected');
-        }
+        setTripsList(data);
+        setDbStatus('connected');
       } catch (err) {
-        console.error('Error fetching trips from Supabase:', err instanceof Error ? err.message : err);
+        console.error('Error fetching trips from Firebase:', err instanceof Error ? err.message : err);
         setTripsList(mockTrips);
         setDbStatus('preview');
       } finally {
@@ -63,7 +73,7 @@ export default function ExploreLobby() {
     };
 
     fetchTrips();
-  }, [setTripsList, setIsLoading]);
+  }, [setTripsList, setIsLoading, currentUser]);
 
   // Derived state for Country tabs
   const countries = ['All', ...Array.from(new Set(tripsList.map(t => t.country)))];
@@ -104,31 +114,24 @@ export default function ExploreLobby() {
       colors: ['#6366f1', '#8b5cf6', '#10b981', '#ffffff']
     });
 
-    if (dbStatus === 'connected' && hasValidSupabaseConfig) {
+    if (dbStatus === 'connected' && hasValidFirebaseConfig) {
       try {
-        const { error } = await supabase
-          .from('trips')
-          .insert([
-            {
-              id: clonedTrip.id,
-              title: clonedTrip.title,
-              country: clonedTrip.country,
-              city: clonedTrip.city,
-              is_public: clonedTrip.is_public,
-              user_id: clonedTrip.user_id,
-              days_data: clonedTrip.days_data 
-            }
-          ]);
-      
-        if (error) throw error;
+        await setDoc(doc(db, 'trips', clonedTrip.id), {
+          id: clonedTrip.id,
+          title: clonedTrip.title,
+          country: clonedTrip.country,
+          city: clonedTrip.city,
+          is_public: clonedTrip.is_public,
+          user_id: clonedTrip.user_id,
+          days_data: clonedTrip.days_data,
+          created_at: clonedTrip.created_at
+        });
 
-        if (error) throw error;
-        
         // Update list locally
         setCurrentTrip(clonedTrip);
         router.push(`/edit/${clonedTrip.id}`);
       } catch (err) {
-        console.error('Error saving cloned trip to Supabase:', err);
+        console.error('Error saving cloned trip to Firebase:', err);
         // Fallback to local editor transition if database write fails
         setCurrentTrip(clonedTrip);
         router.push(`/edit/${clonedTrip.id}`);
@@ -160,7 +163,7 @@ export default function ExploreLobby() {
             <div className="text-sm">
               <span className="font-bold text-yellow-300">預覽體驗模式 (使用 Mock 靜態資料)</span>
               <p className="text-slate-400 mt-1">
-                尚未配置 Supabase 金鑰。您仍可自由體驗行程搜尋、篩選、新增、編輯以及一鍵複製（在瀏覽器記憶體中暫存）等全部功能！
+                尚未配置 Firebase 金鑰。您仍可自由體驗行程搜尋、篩選、新增、編輯以及一鍵複製（在瀏覽器記憶體中暫存）等全部功能！
               </p>
             </div>
           </div>
@@ -179,8 +182,8 @@ export default function ExploreLobby() {
         <div className="glass bg-emerald-500/10 border-emerald-500/20 p-4 rounded-xl flex items-center gap-3">
           <Database className="text-emerald-400" size={20} />
           <div className="text-sm text-slate-300">
-            <span className="font-bold text-emerald-400">雲端資料庫已連線 (Supabase)</span>
-            <p className="text-slate-400 text-xs">行程變更將直接儲存至 PostgreSQL。感謝使用！</p>
+            <span className="font-bold text-emerald-400">雲端資料庫已連線 (Firebase)</span>
+            <p className="text-slate-400 text-xs">行程變更將直接儲存至 Firestore。感謝使用！</p>
           </div>
         </div>
       )}

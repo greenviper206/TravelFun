@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useTripStore, mockTrips } from '../../../store/useTripStore';
-import { supabase, hasValidSupabaseConfig } from '../../../lib/supabaseClient';
+import { db, hasValidFirebaseConfig } from '../../../lib/firebaseClient';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { 
   ArrowLeft, Save, MapPin, Clock, Plus, Trash2, ArrowUp, ArrowDown, 
   Search, Check, Settings, Share2, Compass, AlertTriangle, Eye, EyeOff
@@ -89,24 +90,20 @@ export default function TripEditor() {
       setEditorLoading(true);
       if (!tripId) return;
 
-      // 1. Try fetching from Supabase if configured
-      if (hasValidSupabaseConfig()) {
+      // 1. Try fetching from Firebase if configured
+      if (hasValidFirebaseConfig) {
         try {
-          const { data, error } = await supabase
-            .from('trips')
-            .select('*')
-            .eq('id', tripId)
-            .single();
+          const docRef = doc(db, 'trips', tripId);
+          const docSnap = await getDoc(docRef);
 
-          if (error) throw error;
-
-          if (data) {
+          if (docSnap.exists()) {
+            const data = { id: docSnap.id, ...docSnap.data() };
             setCurrentTrip(data);
             setEditorLoading(false);
             return;
           }
         } catch (err) {
-          console.warn('Could not load trip from Supabase, checking local/mock:', err);
+          console.warn('Could not load trip from Firebase, checking local/mock:', err);
         }
       }
 
@@ -355,22 +352,19 @@ export default function TripEditor() {
       origin: { x: 1 }
     });
 
-    if (hasValidSupabaseConfig()) {
+    if (hasValidFirebaseConfig) {
       try {
-        const { error } = await supabase
-          .from('trips')
-          .upsert({
-            id: currentTrip.id,
-            title: currentTrip.title,
-            country: currentTrip.country,
-            city: currentTrip.city,
-            is_public: currentTrip.is_public,
-            user_id: currentUser?.id || currentTrip.user_id || null,
-            days_data: currentTrip.days_data,
-            created_at: currentTrip.created_at || new Date().toISOString()
-          });
+        await setDoc(doc(db, 'trips', currentTrip.id), {
+          id: currentTrip.id,
+          title: currentTrip.title,
+          country: currentTrip.country,
+          city: currentTrip.city,
+          is_public: currentTrip.is_public,
+          user_id: currentUser?.id || currentTrip.user_id || null,
+          days_data: currentTrip.days_data,
+          created_at: currentTrip.created_at || new Date().toISOString()
+        }, { merge: true });
 
-        if (error) throw error;
         setSaveStatus('success');
       } catch (err) {
         console.error('Error saving trip:', err);

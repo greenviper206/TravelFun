@@ -1,14 +1,40 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTripStore } from '../store/useTripStore';
-import { Compass, Plus, LogIn, LogOut, User, MapPin } from 'lucide-react';
+import { auth, hasValidFirebaseConfig } from '../lib/firebaseClient';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { Compass, Plus, LogIn, LogOut, User } from 'lucide-react';
 
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { currentUser, setCurrentUser, setAuthModalOpen, setCurrentTrip } = useTripStore();
+
+  // Listen to Firebase Auth state changes for session persistence
+  useEffect(() => {
+    if (!hasValidFirebaseConfig) return;
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser({
+          id: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || ''
+        });
+      } else {
+        // Only reset to null if the current user session is not a mock guest session
+        const currentLocalUser = useTripStore.getState().currentUser;
+        if (currentLocalUser && !currentLocalUser.id.startsWith('mock-')) {
+          setCurrentUser(null);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [setCurrentUser]);
 
   const handleLogoClick = () => {
     router.push('/');
@@ -40,7 +66,14 @@ export default function Navbar() {
     router.push(`/edit/${newTrip.id}`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (hasValidFirebaseConfig) {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        console.error('Firebase signout error:', err);
+      }
+    }
     setCurrentUser(null);
     router.push('/');
   };
@@ -90,9 +123,20 @@ export default function Navbar() {
 
         {currentUser ? (
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-400">
-              <User size={12} className="text-indigo-400" />
-              <span className="max-w-[120px] truncate">{currentUser.email}</span>
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-400">
+              {currentUser.photoURL ? (
+                <img 
+                  src={currentUser.photoURL} 
+                  alt="User Profile" 
+                  className="w-5 h-5 rounded-full object-cover border border-indigo-500/30"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <User size={12} className="text-indigo-400" />
+              )}
+              <span className="max-w-[120px] truncate font-medium text-slate-300">
+                {currentUser.displayName || currentUser.email}
+              </span>
             </div>
             
             <button
