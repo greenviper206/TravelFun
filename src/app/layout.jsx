@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+
 import { Geist, Geist_Mono } from "next/font/google";
 import Navbar from "../components/Navbar";
 import AuthModal from "../components/AuthModal";
@@ -14,16 +14,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "TravelFun 🧭 社群共享版行程規劃助手",
   description: "個人私密編輯與社群公開分享的一站式行程助手。一鍵複製精彩行程，支援二級地區篩選與地圖路線規劃！",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}) {
   return (
     <html
       lang="zh-TW"

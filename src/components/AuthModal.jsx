@@ -10,7 +10,7 @@ export default function AuthModal() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   if (!isAuthModalOpen) return null;
@@ -20,7 +20,7 @@ export default function AuthModal() {
     setAuthModalOpen(false);
   };
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -58,7 +58,7 @@ export default function AuthModal() {
           setError('註冊成功！若有啟用信箱驗證，請至信箱點擊驗證信；或者您可直接嘗試登入。');
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message || '發生錯誤，請稍後再試。');
     } finally {
       setLoading(false);

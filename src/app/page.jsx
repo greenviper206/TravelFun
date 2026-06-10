@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTripStore, Trip, mockTrips } from '../store/useTripStore';
+import { useTripStore, mockTrips } from '../store/useTripStore';
 import { supabase, hasValidSupabaseConfig } from '../lib/supabaseClient';
 import { Search, MapPin, Calendar, User, Eye, Copy, AlertCircle, Database, HelpCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -26,7 +26,7 @@ export default function ExploreLobby() {
     setIsLoading
   } = useTripStore();
 
-  const [dbStatus, setDbStatus] = useState<'connected' | 'preview'>('preview');
+  const [dbStatus, setDbStatus] = useState('preview');
 
   // Load Trips
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function ExploreLobby() {
     : [];
 
   // One-click Fork / Clone Trip
-  const handleForkTrip = async (e: React.MouseEvent, trip: Trip) => {
+  const handleForkTrip = async (e, trip) => {
     e.stopPropagation(); // Avoid card click navigation
 
     if (!currentUser) {
@@ -85,7 +85,7 @@ export default function ExploreLobby() {
     setIsLoading(true);
 
     // Deep copy and transform
-    const clonedTrip: Trip = {
+    const clonedTrip = {
       id: `trip-${Date.now()}`,
       title: `${trip.title} (複製版) 📝`,
       country: trip.country,
@@ -118,7 +118,7 @@ export default function ExploreLobby() {
               user_id: clonedTrip.user_id,
               days_data: clonedTrip.days_data 
             }
-          ] as any);
+          ]);
       
         if (error) throw error;
 
@@ -144,7 +144,7 @@ export default function ExploreLobby() {
     setIsLoading(false);
   };
 
-  const handleCardClick = (trip: Trip) => {
+  const handleCardClick = (trip) => {
     setCurrentTrip(trip);
     router.push(`/edit/${trip.id}`);
   };

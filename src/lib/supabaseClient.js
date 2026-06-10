@@ -5,7 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const hasValidSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 
-const globalForSupabase = globalThis as unknown as { supabase: ReturnType<typeof createClient> };
+const globalForSupabase = globalThis;
 
 const url = supabaseUrl || 'https://gwalvixkkjmlxeqfqncm.supabase.co';
 const key = supabaseAnonKey || 'placeholder-key';

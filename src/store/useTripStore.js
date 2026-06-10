@@ -1,79 +1,8 @@
 import { create } from 'zustand';
 
-export interface Place {
-  id: string;
-  time: string;
-  name: string;
-  description: string;
-  lat: number;
-  lng: number;
-}
-
-export interface DayData {
-  day: number;
-  places: Place[];
-}
-
-export interface Trip {
-  id: string;
-  title: string;
-  country: string;
-  city: string;
-  is_public: boolean;
-  user_id?: string | null;
-  created_at?: string;
-  days_data: DayData[];
-}
-
-interface UserState {
-  id: string;
-  email: string;
-}
-
-interface TripStore {
-  // State
-  tripsList: Trip[];
-  filteredTrips: Trip[];
-  currentTrip: Trip | null;
-  currentUser: UserState | null;
-  isLoading: boolean;
-  isAuthModalOpen: boolean;
-  
-  // Search & Filter
-  searchQuery: string;
-  selectedCountry: string | null;
-  selectedCity: string | null;
-  
-  // Custom Mapbox Token (cached in localStorage)
-  mapboxToken: string | null;
-  mapFocusedPlaceId: string | null;
-  
-  // Actions
-  setTripsList: (trips: Trip[]) => void;
-  setCurrentTrip: (trip: Trip | null) => void;
-  updateCurrentTrip: (updates: Partial<Trip>) => void;
-  updateDaysData: (daysData: DayData[]) => void;
-  setCurrentUser: (user: UserState | null) => void;
-  setIsLoading: (loading: boolean) => void;
-  setAuthModalOpen: (open: boolean) => void;
-  setSearchQuery: (query: string) => void;
-  setSelectedCountry: (country: string | null) => void;
-  setSelectedCity: (city: string | null) => void;
-  setMapboxToken: (token: string | null) => void;
-  setMapFocusedPlaceId: (id: string | null) => void;
-  applyFilters: () => void;
-  
-  // Helper Actions
-  addNewDay: () => void;
-  deleteDay: (dayNum: number) => void;
-  addPlaceToDay: (dayNum: number, place: Omit<Place, 'id'>) => void;
-  removePlaceFromDay: (dayNum: number, placeId: string) => void;
-  updatePlaceInDay: (dayNum: number, placeId: string, updates: Partial<Place>) => void;
-  reorderPlacesInDay: (dayNum: number, startIndex: number, endIndex: number) => void;
-}
 
 // 預設精美 Mock Data，讓使用者在沒有設定 Supabase 時也能體驗所有功能
-export const mockTrips: Trip[] = [
+export const mockTrips = [
   {
     id: 'mock-trip-1',
     title: '東京櫻花季與潮流文化五日遊',
@@ -171,9 +100,9 @@ export const mockTrips: Trip[] = [
   }
 ];
 
-export const useTripStore = create<TripStore>((set, get) => {
+export const useTripStore = create((set, get) => {
   // Try to load Mapbox token from localStorage if available (client side only)
-  let initialToken: string | null = null;
+  let initialToken = null;
   if (typeof window !== 'undefined') {
     initialToken = localStorage.getItem('travel_fun_mapbox_token') || process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || null;
   }
@@ -306,7 +235,7 @@ export const useTripStore = create<TripStore>((set, get) => {
       const { currentTrip } = get();
       if (!currentTrip) return;
 
-      const newPlace: Place = {
+      const newPlace = {
         ...place,
         id: `place-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       };

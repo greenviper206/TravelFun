@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useTripStore, Trip } from '../store/useTripStore';
+import { useTripStore } from '../store/useTripStore';
 import { Compass, Plus, LogIn, LogOut, User, MapPin } from 'lucide-react';
 
 export default function Navbar() {
@@ -21,7 +21,7 @@ export default function Navbar() {
     }
 
     // Create a new blank trip
-    const newTrip: Trip = {
+    const newTrip = {
       id: `trip-${Date.now()}`,
       title: '我的全新未命名行程 ✈️',
       country: '日本',

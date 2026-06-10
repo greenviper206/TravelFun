@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useTripStore, Trip, DayData, Place, mockTrips } from '../../../store/useTripStore';
+import { useTripStore, mockTrips } from '../../../store/useTripStore';
 import { supabase, hasValidSupabaseConfig } from '../../../lib/supabaseClient';
 import { 
   ArrowLeft, Save, MapPin, Clock, Plus, Trash2, ArrowUp, ArrowDown, 
@@ -15,7 +15,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 export default function TripEditor() {
   const params = useParams();
   const router = useRouter();
-  const tripId = params.id as string;
+  const tripId = params.id;
 
   const {
     currentTrip,
@@ -30,20 +30,58 @@ export default function TripEditor() {
     setTripsList
   } = useTripStore();
 
-  const [activeDay, setActiveDay] = useState<number>(1);
+  const [activeDay, setActiveDay] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [editorLoading, setEditorLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState('idle');
   const [customTokenInput, setCustomTokenInput] = useState('');
   const [showTokenSettings, setShowTokenSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Map Refs
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef([]);
+
+  // Draw timeline connecting lines on Map
+  function drawRoute(map, places) {
+    if (places.length < 2) return;
+
+    const coordinates = places.map(p => [p.lng, p.lat]);
+
+    // Check if layer already exists
+    if (map.getLayer('route-line')) return;
+
+    map.addSource('route-source', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: coordinates
+        }
+      }
+    });
+
+    map.addLayer({
+      id: 'route-line',
+      type: 'line',
+      source: 'route-source',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#6366f1',
+        'line-width': 4,
+        'line-opacity': 0.8,
+        'line-dasharray': [2, 1]
+      }
+    });
+  }
 
   // Fetch or setup currentTrip
   useEffect(() => {
@@ -63,7 +101,7 @@ export default function TripEditor() {
           if (error) throw error;
 
           if (data) {
-            setCurrentTrip(data as Trip);
+            setCurrentTrip(data);
             setEditorLoading(false);
             return;
           }
@@ -82,7 +120,7 @@ export default function TripEditor() {
           setCurrentTrip(foundMock);
         } else {
           // 3. Create a default trip if not found anywhere
-          const newBlankTrip: Trip = {
+          const newBlankTrip = {
             id: tripId,
             title: '全新冒險旅程 🗺️',
             country: '日本',
@@ -123,7 +161,7 @@ export default function TripEditor() {
     const places = currentDayData?.places || [];
 
     // Map Center logic: Center on focused place, first place, or default center (Taipei)
-    let center: [number, number] = [121.5644, 25.0339]; // Default Taipei
+    let center = [121.5644, 25.0339]; // Default Taipei
     let zoom = 12;
 
     const focusedPlace = places.find(p => p.id === mapFocusedPlaceId);
@@ -218,45 +256,9 @@ export default function TripEditor() {
       console.error('Error rendering Mapbox map:', err);
     }
 
-  }, [currentTrip, activeDay, mapboxToken, mapFocusedPlaceId, editorLoading, setMapFocusedPlaceId]);
+  }, [currentTrip, activeDay, mapboxToken, mapFocusedPlaceId, editorLoading, setMapFocusedPlaceId, mapContainerRef]);
 
-  // Draw timeline connecting lines on Map
-  const drawRoute = (map: mapboxgl.Map, places: Place[]) => {
-    if (places.length < 2) return;
 
-    const coordinates = places.map(p => [p.lng, p.lat]);
-
-    // Check if layer already exists
-    if (map.getLayer('route-line')) return;
-
-    map.addSource('route-source', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: coordinates
-        }
-      }
-    });
-
-    map.addLayer({
-      id: 'route-line',
-      type: 'line',
-      source: 'route-source',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#6366f1',
-        'line-width': 4,
-        'line-opacity': 0.8,
-        'line-dasharray': [2, 1]
-      }
-    });
-  };
 
   // Geo-search using Photon API
   const handleSearchPlaces = async () => {
@@ -279,7 +281,7 @@ export default function TripEditor() {
   };
 
   // Add Place from Search Results
-  const handleAddSearchResult = (feature: any) => {
+  const handleAddSearchResult = (feature) => {
     if (!currentTrip) return;
 
     const coords = feature.geometry.coordinates; // [lng, lat]
@@ -302,7 +304,7 @@ export default function TripEditor() {
       nextTime = `${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
     }
 
-    const newPlace: Omit<Place, 'id'> = {
+    const newPlace = {
       name: name,
       time: nextTime,
       description: description,
@@ -313,7 +315,7 @@ export default function TripEditor() {
     // Use Zustand store action to add place
     // Add locally in UI
     const randomId = `place-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const placeWithId: Place = { ...newPlace, id: randomId };
+    const placeWithId = { ...newPlace, id: randomId };
 
     const updatedDaysData = currentTrip.days_data.map(d => {
       if (d.day === activeDay) {
@@ -370,7 +372,7 @@ export default function TripEditor() {
 
         if (error) throw error;
         setSaveStatus('success');
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error saving trip:', err);
         setSaveStatus('error');
         setErrorMessage(err.message || '儲存失敗，請檢查資料庫連線。');
@@ -390,7 +392,7 @@ export default function TripEditor() {
   };
 
   // Reorder buttons handlers
-  const handleMovePlace = (index: number, direction: 'up' | 'down') => {
+  const handleMovePlace = (index, direction) => {
     if (!currentTrip) return;
     const dayData = currentTrip.days_data.find(d => d.day === activeDay);
     if (!dayData) return;
@@ -416,7 +418,7 @@ export default function TripEditor() {
   };
 
   // Delete Place
-  const handleDeletePlace = (placeId: string) => {
+  const handleDeletePlace = (placeId) => {
     if (!currentTrip) return;
     const dayData = currentTrip.days_data.find(d => d.day === activeDay);
     if (!dayData) return;
@@ -436,7 +438,7 @@ export default function TripEditor() {
   };
 
   // Update Place Details
-  const handleUpdatePlaceDetail = (placeId: string, updates: Partial<Place>) => {
+  const handleUpdatePlaceDetail = (placeId, updates) => {
     if (!currentTrip) return;
     const updatedDaysData = currentTrip.days_data.map(d => {
       if (d.day === activeDay) {
@@ -463,7 +465,7 @@ export default function TripEditor() {
   };
 
   // Delete a Day
-  const handleDeleteDay = (dayNum: number) => {
+  const handleDeleteDay = (dayNum) => {
     if (!currentTrip) return;
     if (currentTrip.days_data.length <= 1) return; // Limit min 1 day
 
