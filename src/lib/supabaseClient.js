@@ -8,7 +8,7 @@ export const hasValidSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const globalForSupabase = globalThis;
 
 const url = supabaseUrl || 'https://gwalvixkkjmlxeqfqncm.supabase.co';
-const key = supabaseAnonKey || 'placeholder-key';
+const key = supabaseAnonKey || 'sb_publishable_k3070NTq31Ppb_RX_QFWRw_kKPYhg5X';
 
 export const supabase = globalForSupabase.supabase || createClient(url, key);
 
