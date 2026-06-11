@@ -2,111 +2,139 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTripStore, mockTrips } from '../store/useTripStore';
+import { useTripStore, mockTrips as defaultMockTrips } from '../store/useTripStore';
 import { db, hasValidFirebaseConfig } from '../lib/firebaseClient';
-import { collection, getDocs, doc, setDoc, query, where, or } from 'firebase/firestore';
-import { Search, MapPin, Calendar, User, Eye, Copy, AlertCircle, Database, HelpCircle } from 'lucide-react';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { Search, MapPin, Calendar, AlertCircle, Database, Copy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function ExploreLobby() {
   const router = useRouter();
-  const {
-    tripsList,
-    filteredTrips,
-    setTripsList,
-    searchQuery,
-    setSearchQuery,
-    selectedCountry,
-    setSelectedCountry,
-    selectedCity,
-    setSelectedCity,
-    currentUser,
-    setAuthModalOpen,
-    setCurrentTrip,
-    isLoading,
-    setIsLoading
-  } = useTripStore();
+  
+  // Zustand 全域狀態（假設你原本有用這些，請確保名稱與你的 Store 一致）
+  // 如果這些在 Store 裡不存在，可以改為普通的 useState
+  const { setCurrentTrip, currentUser } = useTripStore(); 
 
-  const [dbStatus, setDbStatus] = useState('preview');
+  // --- 狀態管理 ---
+  const [tripsList, setTripsList] = useState([]);
+  const [dbStatus, setDbStatus] = useState('loading'); // loading, connected, preview
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // 搜尋與篩選狀態
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(null);
+  const [selectedCity, setSelectedCity] = useState(null);
 
-  // Load Trips
+  // 模擬的備用/初始資料（維持你原本的設計）
+  const mockTrips = defaultMockTrips || [
+    { 
+      id: 'mock-1', 
+      title: '東京五天四夜櫻花季', 
+      country: '日本', 
+      city: '東京', 
+      days_data: [{ places: [1, 2] }, { places: [1] }] 
+    },
+    { 
+      id: 'mock-2', 
+      title: '巴黎浪漫鐵塔遊', 
+      country: '法國', 
+      city: '巴黎', 
+      days_data: [{ places: [1, 2, 3] }] 
+    }
+  ];
+
+  // --- 1. 核心優化：安全的 Firebase 資料抓取邏輯 ---
   useEffect(() => {
-    const fetchTrips = async () => {
-      setIsLoading(true);
-      console.log("Firebase API Key 實際內容:", JSON.stringify(process.env.NEXT_PUBLIC_FIREBASE_API_KEY));
-      console.log("Firebase API Key 字串長度:", process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.length);
-      if (!hasValidFirebaseConfig) {
-        console.log('Using local mock data - Firebase not configured');
-        const currentTrips = useTripStore.getState().tripsList;
-        setTripsList(currentTrips);
-        setDbStatus('preview');
-        setIsLoading(false);
-        return;
-      }
-
+    async function fetchTrips() {
       try {
+        setDbStatus('loading');
         setIsLoading(true);
-        let q;
-        if (currentUser && currentUser.id) {
-          q = query(
-            collection(db, 'trips'),
-            or(
-              where('is_public', '==', true),
-              where('user_id', '==', currentUser.id)
-            )
-          );
-        } else {
-          q = query(collection(db, 'trips'), where('is_public', '==', true));
+
+        // 防呆：如果本地偵測到連金鑰設定都沒有，直接跳 Mock 模式，省去無謂的 Request 报错
+        if (!hasValidFirebaseConfig) {
+          console.log("偵測到未設定 Firebase 金鑰，啟用 Mock 預覽模式。");
+          setTripsList(mockTrips);
+          setDbStatus('preview');
+          return;
         }
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        setTripsList(data);
-        setDbStatus('connected');
+        // 抓取整個 trips 集合
+        const querySnapshot = await getDocs(collection(db, "trips"));
+        
+        if (!querySnapshot.empty) {
+          const firebaseTrips = [];
+          querySnapshot.forEach((doc) => {
+            firebaseTrips.push({ id: doc.id, ...doc.data() });
+          });
+          
+          setTripsList(firebaseTrips);
+          setDbStatus('connected'); // 雲端連線成功且有資料
+        } else {
+          // 連線成功，但資料庫是空的（新專案常見情況）
+          console.log("Firebase 中沒有任何行程資料，啟用 Mock 資料展示。");
+          setTripsList(mockTrips);
+          setDbStatus('connected'); 
+        }
       } catch (err) {
-        console.error('Error fetching trips from Firebase:', err instanceof Error ? err.message : err);
+        // 🔴 關鍵安全性降級：萬一被 Security Rules 擋住或斷線，不會噴白畫面，而是改用 Mock
+        console.error('Error fetching trips from Firebase, falling back to mock:', err);
         setTripsList(mockTrips);
-        setDbStatus('preview');
+        setDbStatus('preview'); 
       } finally {
         setIsLoading(false);
       }
-    };
+    }
 
     fetchTrips();
-  }, [setTripsList, setIsLoading, currentUser]);
+  }, []);
 
-  // Derived state for Country tabs
-  const countries = ['All', ...Array.from(new Set(tripsList.map(t => t.country)))];
+  // --- 2. 篩選與搜尋衍生邏輯 ---
+  // 自動動態產生有存在的國家選單
+  const countries = ['All', ...new Set(tripsList.map(t => t.country).filter(Boolean))];
+  
+  // 依據選擇的國家，連動產生存有的城市選單
+  const availableCities = selectedCountry 
+    ? ['All', ...new Set(tripsList.filter(t => t.country === selectedCountry).map(t => t.city).filter(Boolean))]
+    : ['All'];
 
-  // Derived state for City subtabs (dynamic lock/unlock based on selected country)
-  const availableCities = selectedCountry && selectedCountry !== 'All'
-    ? ['All', ...Array.from(new Set(tripsList.filter(t => t.country === selectedCountry).map(t => t.city)))]
-    : [];
+  // 複合搜尋過濾
+  const filteredTrips = tripsList.filter(trip => {
+    const matchesSearch = searchQuery.trim() === '' || 
+      trip.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      trip.country?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      trip.city?.toLowerCase().includes(searchQuery.toLowerCase());
 
-  // One-click Fork / Clone Trip
+    const matchesCountry = !selectedCountry || trip.country === selectedCountry;
+    const matchesCity = !selectedCity || trip.city === selectedCity;
+
+    return matchesSearch && matchesCountry && matchesCity;
+  });
+
+  // --- 3. 互動事件處理 ---
+  // 複製（Fork）行程功能
   const handleForkTrip = async (e, trip) => {
-    e.stopPropagation(); // Avoid card click navigation
+    e.stopPropagation(); // 防止觸發外層卡片的點擊事件
 
     if (!currentUser) {
-      setAuthModalOpen(true);
+      alert("請先登入帳號以複製並編輯行程！"); // 你原本有實作 AuthModal 可以換回 setAuthModalOpen(true)
       return;
     }
 
     setIsLoading(true);
 
-    // Deep copy and transform
+    // 深拷貝並建立新行程資料
     const clonedTrip = {
       id: `trip-${Date.now()}`,
       title: `${trip.title} (複製版) 📝`,
-      country: trip.country,
-      city: trip.city,
-      is_public: false, // Clone starts as private
-      user_id: currentUser.id,
-      days_data: JSON.parse(JSON.stringify(trip.days_data)), // Deep copy of days & places
+      country: trip.country || '',
+      city: trip.city || '',
+      is_public: false, // 複製出來的預設為不公開
+      user_id: currentUser.id || currentUser.uid,
+      days_data: JSON.parse(JSON.stringify(trip.days_data || [])), 
       created_at: new Date().toISOString()
     };
 
-    // Confetti effect!
+    // 噴紙花特效 🎉
     confetti({
       particleCount: 120,
       spread: 70,
@@ -114,32 +142,20 @@ export default function ExploreLobby() {
       colors: ['#6366f1', '#8b5cf6', '#10b981', '#ffffff']
     });
 
+    // 判斷要存入雲端還是暫存本地
     if (dbStatus === 'connected' && hasValidFirebaseConfig) {
       try {
-        await setDoc(doc(db, 'trips', clonedTrip.id), {
-          id: clonedTrip.id,
-          title: clonedTrip.title,
-          country: clonedTrip.country,
-          city: clonedTrip.city,
-          is_public: clonedTrip.is_public,
-          user_id: clonedTrip.user_id,
-          days_data: clonedTrip.days_data,
-          created_at: clonedTrip.created_at
-        });
-
-        // Update list locally
+        await setDoc(doc(db, 'trips', clonedTrip.id), clonedTrip);
         setCurrentTrip(clonedTrip);
         router.push(`/edit/${clonedTrip.id}`);
       } catch (err) {
         console.error('Error saving cloned trip to Firebase:', err);
-        // Fallback to local editor transition if database write fails
+        // 如果雲端寫入因為權限規則失敗，依然進入編輯器讓使用者能在前端暫時調整
         setCurrentTrip(clonedTrip);
         router.push(`/edit/${clonedTrip.id}`);
       }
     } else {
-      // Preview mode: Update locally in Zustand and proceed
-      const updatedList = [clonedTrip, ...tripsList];
-      setTripsList(updatedList);
+      // 預覽模式下直接走前端暫存機制
       setCurrentTrip(clonedTrip);
       router.push(`/edit/${clonedTrip.id}`);
     }
@@ -147,39 +163,37 @@ export default function ExploreLobby() {
     setIsLoading(false);
   };
 
+  // 點擊卡片進入編輯
   const handleCardClick = (trip) => {
+    if (!currentUser) {
+      alert("請先登入帳號！");
+      return;
+    }
     setCurrentTrip(trip);
     router.push(`/edit/${trip.id}`);
   };
 
+  // --- 4. 渲染畫面 ---
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in p-6 max-w-7xl mx-auto">
       
-      {/* DB Connection Status Banner */}
+      {/* 狀態橫幅 Banner */}
       {dbStatus === 'preview' && (
-        <div className="glass bg-yellow-500/10 border-yellow-500/20 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex gap-3">
             <AlertCircle className="text-yellow-400 shrink-0 mt-1 md:mt-0" size={20} />
             <div className="text-sm">
               <span className="font-bold text-yellow-300">預覽體驗模式 (使用 Mock 靜態資料)</span>
               <p className="text-slate-400 mt-1">
-                尚未配置 Firebase 金鑰。您仍可自由體驗行程搜尋、篩選、新增、編輯以及一鍵複製（在瀏覽器記憶體中暫存）等全部功能！
+                尚未配置 Firebase 金鑰或權限受限。請聯絡系統管理員，或登入您的帳號以開始新增、編輯、複製及儲存您的行程。
               </p>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setAuthModalOpen(true)}
-              className="text-xs font-bold bg-yellow-500 hover:bg-yellow-600 text-[#0b0f19] px-3.5 py-2 rounded-lg transition-colors duration-200"
-            >
-              一鍵模擬登入
-            </button>
           </div>
         </div>
       )}
 
       {dbStatus === 'connected' && (
-        <div className="glass bg-emerald-500/10 border-emerald-500/20 p-4 rounded-xl flex items-center gap-3">
+        <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl flex items-center gap-3">
           <Database className="text-emerald-400" size={20} />
           <div className="text-sm text-slate-300">
             <span className="font-bold text-emerald-400">雲端資料庫已連線 (Firebase)</span>
@@ -188,18 +202,18 @@ export default function ExploreLobby() {
         </div>
       )}
 
-      {/* Main Title & Search */}
+      {/* 標題與搜尋欄 */}
       <div className="text-center space-y-4 max-w-2xl mx-auto py-4">
-        <h2 className="text-4xl font-extrabold tracking-tight md:text-5xl">
-          探索別人的 <span className="gradient-text">完美旅程</span>
+        <h2 className="text-4xl font-extrabold tracking-tight md:text-5xl text-white">
+          探索別人的 <span className="text-indigo-400">完美旅程</span>
         </h2>
         <p className="text-slate-400 text-sm md:text-base">
           在大廳尋找世界各地的精選旅遊行程，點擊複製即可快速編輯，調整為屬於您專屬的旅遊計畫。
         </p>
 
-        {/* Search Box */}
+        {/* 搜尋方框 */}
         <div className="relative max-w-lg mx-auto mt-6">
-          <div className="flex items-center bg-slate-900/60 border border-slate-800 focus-within:border-indigo-500 rounded-xl px-4 py-3 search-input-glow transition-all duration-200">
+          <div className="flex items-center bg-slate-900/60 border border-slate-800 focus-within:border-indigo-500 rounded-xl px-4 py-3 transition-all duration-200">
             <Search className="text-slate-400 mr-2" size={18} />
             <input
               type="text"
@@ -212,9 +226,8 @@ export default function ExploreLobby() {
         </div>
       </div>
 
-      {/* Filter Tabs Container */}
-      <div className="glass p-5 rounded-2xl space-y-4 shadow-xl">
-        {/* Country Filter */}
+      {/* 分類篩選標籤 */}
+      <div className="bg-slate-900/40 p-5 rounded-2xl space-y-4 shadow-xl border border-slate-800">
         <div className="space-y-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
             選擇國家 / 地區
@@ -225,10 +238,13 @@ export default function ExploreLobby() {
               return (
                 <button
                   key={country}
-                  onClick={() => setSelectedCountry(country === 'All' ? null : country)}
+                  onClick={() => {
+                    setSelectedCountry(country === 'All' ? null : country);
+                    setSelectedCity(null); // 切換國家時重設城市
+                  }}
                   className={`px-4 py-1.5 rounded-full text-sm font-semibold shrink-0 transition-all duration-200 ${
                     isActive
-                      ? 'gradient-brand text-white shadow-md shadow-indigo-500/20 scale-102'
+                      ? 'bg-indigo-600 text-white shadow-md scale-105'
                       : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
                   }`}
                 >
@@ -239,9 +255,9 @@ export default function ExploreLobby() {
           </div>
         </div>
 
-        {/* City Filter (Conditional based on Country selected) */}
-        {selectedCountry && selectedCountry !== 'All' && (
-          <div className="space-y-2 pt-2 border-t border-slate-800/60 animate-fade-in">
+        {/* 城市連動篩選 */}
+        {selectedCountry && (
+          <div className="space-y-2 pt-2 border-t border-slate-800/60">
             <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block">
               地區城市篩選 (連動解鎖 🔓)
             </span>
@@ -254,7 +270,7 @@ export default function ExploreLobby() {
                     onClick={() => setSelectedCity(city === 'All' ? null : city)}
                     className={`px-3.5 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all duration-200 ${
                       isActive
-                        ? 'bg-indigo-500 text-white shadow-md scale-102'
+                        ? 'bg-indigo-500 text-white shadow-md'
                         : 'bg-slate-950 border border-slate-900 text-slate-500 hover:text-white'
                     }`}
                   >
@@ -267,8 +283,8 @@ export default function ExploreLobby() {
         )}
       </div>
 
-      {/* Loading state */}
-      {isLoading ? (
+      {/* 列表渲染區域 */}
+      {isLoading && tripsList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="w-12 h-12 rounded-full border-4 border-indigo-600/30 border-t-indigo-500 animate-spin"></div>
           <span className="text-slate-400 text-sm font-semibold">讀取行程檔案中...</span>
@@ -278,48 +294,48 @@ export default function ExploreLobby() {
           <MapPin className="text-slate-600 mx-auto mb-3" size={40} />
           <h3 className="text-lg font-bold text-slate-300">找不到相符的行程</h3>
           <p className="text-slate-500 text-sm mt-1 max-w-md mx-auto">
-            嘗試更換關鍵字、國家或城市，或者點擊右上角的「規劃新行程」開始創建您的旅途吧！
+            嘗試更換關鍵字、國家或城市，或者開始創建您的全新旅途吧！
           </p>
         </div>
       ) : (
-        /* Cards Grid */
+        /* 卡片網格 */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTrips.map(trip => {
-            // Count total locations in days_data
-            const totalPlaces = trip.days_data.reduce((acc, d) => acc + (d.places?.length || 0), 0);
+            const totalPlaces = (trip.days_data || []).reduce((acc, d) => acc + (d.places?.length || 0), 0);
             
             return (
               <div
                 key={trip.id}
                 onClick={() => handleCardClick(trip)}
-                className="group relative rounded-2xl glass glass-hover p-6 flex flex-col justify-between cursor-pointer select-none overflow-hidden"
+                className="group relative rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-indigo-500/50 p-6 flex flex-col justify-between cursor-pointer transition-all duration-300 shadow-lg overflow-hidden"
               >
-                {/* Visual card glow decoration */}
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-all duration-300"></div>
-                
                 <div className="space-y-4">
-                  {/* Country & City Tags */}
+                  {/* 標籤 */}
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-md bg-indigo-950/40 border border-indigo-800/40 text-[10px] font-bold text-indigo-400 uppercase tracking-wide">
-                      {trip.country}
-                    </span>
-                    <span className="px-2.5 py-1 rounded-md bg-slate-950/40 border border-slate-800/40 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                      {trip.city}
-                    </span>
+                    {trip.country && (
+                      <span className="px-2.5 py-1 rounded-md bg-indigo-950/40 border border-indigo-800/40 text-[10px] font-bold text-indigo-400 uppercase tracking-wide">
+                        {trip.country}
+                      </span>
+                    )}
+                    {trip.city && (
+                      <span className="px-2.5 py-1 rounded-md bg-slate-950/40 border border-slate-800/40 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                        {trip.city}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Title */}
+                  {/* 標題 */}
                   <h3 className="text-lg font-extrabold text-white leading-snug group-hover:text-indigo-400 transition-colors duration-200">
                     {trip.title}
                   </h3>
                 </div>
 
+                {/* 底部數據與複製按鈕 */}
                 <div className="mt-6 pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
-                  {/* Left: Stats */}
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
                       <Calendar size={13} className="text-slate-500" />
-                      <span>{trip.days_data.length} 天</span>
+                      <span>{trip.days_data?.length || 0} 天</span>
                     </span>
                     <span className="flex items-center gap-1">
                       <MapPin size={13} className="text-slate-500" />
@@ -327,7 +343,6 @@ export default function ExploreLobby() {
                     </span>
                   </div>
 
-                  {/* Right: Actions */}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => handleForkTrip(e, trip)}

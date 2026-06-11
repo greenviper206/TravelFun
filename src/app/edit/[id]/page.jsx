@@ -23,6 +23,8 @@ export default function TripEditor() {
     setCurrentTrip,
     updateCurrentTrip,
     currentUser,
+    authInitialized,
+    setAuthModalOpen,
     mapboxToken,
     setMapboxToken,
     mapFocusedPlaceId,
@@ -83,6 +85,14 @@ export default function TripEditor() {
       }
     });
   }
+
+  // Redirect back to home and open AuthModal if user is not logged in
+  useEffect(() => {
+    if (authInitialized && !currentUser) {
+      router.push('/');
+      setAuthModalOpen(true);
+    }
+  }, [authInitialized, currentUser, router, setAuthModalOpen]);
 
   // Fetch or setup currentTrip
   useEffect(() => {

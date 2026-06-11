@@ -10,11 +10,14 @@ import { Compass, Plus, LogIn, LogOut, User } from 'lucide-react';
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser, setCurrentUser, setAuthModalOpen, setCurrentTrip } = useTripStore();
+  const { currentUser, setCurrentUser, setAuthModalOpen, setCurrentTrip, setAuthInitialized } = useTripStore();
 
   // Listen to Firebase Auth state changes for session persistence
   useEffect(() => {
-    if (!hasValidFirebaseConfig) return;
+    if (!hasValidFirebaseConfig) {
+      setAuthInitialized(true);
+      return;
+    }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -25,16 +28,13 @@ export default function Navbar() {
           photoURL: user.photoURL || ''
         });
       } else {
-        // Only reset to null if the current user session is not a mock guest session
-        const currentLocalUser = useTripStore.getState().currentUser;
-        if (currentLocalUser && !currentLocalUser.id.startsWith('mock-')) {
-          setCurrentUser(null);
-        }
+        setCurrentUser(null);
       }
+      setAuthInitialized(true);
     });
 
     return () => unsubscribe();
-  }, [setCurrentUser]);
+  }, [setCurrentUser, setAuthInitialized]);
 
   const handleLogoClick = () => {
     router.push('/');

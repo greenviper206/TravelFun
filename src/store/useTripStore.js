@@ -113,6 +113,7 @@ export const useTripStore = create((set, get) => {
     filteredTrips: mockTrips,
     currentTrip: null,
     currentUser: null,
+    authInitialized: false,
     isLoading: false,
     isAuthModalOpen: false,
     searchQuery: '',
@@ -142,6 +143,7 @@ export const useTripStore = create((set, get) => {
     },
 
     setCurrentUser: (user) => set({ currentUser: user }),
+    setAuthInitialized: (initialized) => set({ authInitialized: initialized }),
     setIsLoading: (loading) => set({ isLoading: loading }),
     setAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
     

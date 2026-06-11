@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useTripStore } from '../store/useTripStore';
 import { auth, hasValidFirebaseConfig } from '../lib/firebaseClient';
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { X, Sparkles, User, AlertCircle } from 'lucide-react';
+import { X, Sparkles, AlertCircle } from 'lucide-react';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5 mr-2 shrink-0" viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
@@ -32,7 +32,7 @@ export default function AuthModal() {
     setLoading(true);
 
     if (!hasValidFirebaseConfig) {
-      setError('偵測到未設定 Firebase 金鑰！請使用下方的「測試帳號一鍵登入」進行即時預覽體驗。');
+      setError('偵測到未設定 Firebase 金鑰！請聯絡系統管理員或在環境變數中設定 Firebase 金鑰。');
       setLoading(false);
       return;
     }
@@ -54,17 +54,6 @@ export default function AuthModal() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // 測試帳號快速體驗
-  const handleQuickLogin = () => {
-    setCurrentUser({
-      id: 'mock-user-123',
-      email: 'test.traveler@travelfun.io',
-      displayName: '測試旅人 🧭',
-      photoURL: null
-    });
-    handleClose();
   };
 
   return (
@@ -114,21 +103,7 @@ export default function AuthModal() {
           {loading ? '連線中...' : '使用 Google 帳號登入 / 註冊'}
         </button>
 
-        {/* Divider */}
-        <div className="flex items-center my-6">
-          <div className="flex-grow border-t border-slate-800"></div>
-          <span className="px-3 text-xs text-slate-500 uppercase tracking-wider">或</span>
-          <div className="flex-grow border-t border-slate-800"></div>
-        </div>
 
-        {/* Guest Bypass Button */}
-        <button
-          onClick={handleQuickLogin}
-          className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 hover:border-slate-700 py-3 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-[0.98] cursor-pointer"
-        >
-          <User size={16} />
-          測試帳號一鍵登入 (體驗首選)
-        </button>
       </div>
     </div>
   );
