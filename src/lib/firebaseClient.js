@@ -13,8 +13,8 @@ const firebaseConfig = {
 
 // Check if we have valid configuration
 export const hasValidFirebaseConfig = Boolean(
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY && 
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  firebaseConfig.apiKey && 
+  firebaseConfig.projectId
 );
 
 let app;
